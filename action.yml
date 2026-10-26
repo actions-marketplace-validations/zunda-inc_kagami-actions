@@ -24,22 +24,27 @@ runs:
           const { RUNNER_OS, RUNNER_ARCH } = process.env;
           const versions = {
             aarch64_apple_darwin: {
+              filename: 'kagami-aarch64-apple-darwin',
               url: '',
               sha256: '',
             },
             x86_64_apple_darwin: {
+              filename: 'kagami-x86_64-apple-darwin',
               url: '',
               sha256: '',
             },
             aarch64_unknown_linux_gnu: {
+              filename: 'kagami-aarch64-unknown-linux-gnu',
               url: '',
               sha256: '',
             },
             x86_64_unknown_linux_gnu: {
+              filename: 'kagami-x86_64-unknown-linux-gnu',
               url: '',
               sha256: '',
             },
             x86_64_pc_windows_msvc: {
+              filename: 'kagami-x86_64-pc-windows-msvc.exe',
               url: '',
               sha256: '',
             },
