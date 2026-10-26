@@ -1,0 +1,72 @@
+name: kagami integration with GitHub Actions
+description: integrate kagami with GitHub Actions
+inputs:
+  github-token:
+    description: GitHub access token. It's highly recommended to specify to prevent hitting the rate limit.
+    required: false
+  output-format:
+    description: Override `output_format` setting from the setting file.
+    required: false
+  log-level:
+    description: Override `log_level` setting from the setting file.
+    required: false
+  fail-on-severity:
+    description: Override `fail_on_severity` setting from the setting file.
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Determine which version to download
+      id: kagami-download-url
+      uses: actions/github-script@v9
+      with:
+        script: |
+          const { RUNNER_OS, RUNNER_ARCH } = process.env;
+          const versions = {
+            aarch64_apple_darwin: {
+              url: '',
+              sha256: '',
+            },
+            x86_64_apple_darwin: {
+              url: '',
+              sha256: '',
+            },
+            aarch64_unknown_linux_gnu: {
+              url: '',
+              sha256: '',
+            },
+            x86_64_unknown_linux_gnu: {
+              url: '',
+              sha256: '',
+            },
+            x86_64_pc_windows_msvc: {
+              url: '',
+              sha256: '',
+            },
+          }
+          
+          if (!RUNNER_OS || !RUNNER_ARCH) {
+            throw new Error('RUNNER_OS or RUNNER_ARCH is not defined');
+          }
+          
+          if (RUNNER_OS === 'Linux' && RUNNER_ARCH === 'X64') {
+            return versions.x86_64_unknown_linux_gnu;
+          } else if (RUNNER_OS === 'Linux' && RUNNER_ARCH === 'ARM64') {
+            return versions.aarch64_unknown_linux_gnu;
+          } else if (RUNNER_OS === 'macOS' && RUNNER_ARCH === 'X64') {
+            return versions.x86_64_apple_darwin;
+          } else if (RUNNER_OS === 'macOS' && RUNNER_ARCH === 'ARM64') {
+            return versions.aarch64_apple_darwin;
+          } else if (RUNNER_OS === 'Windows' && RUNNER_ARCH === 'X64') {
+            return versions.x86_64_pc_windows_msvc;
+          } else {
+            throw new Error(`Unsupported platform: ${RUNNER_OS} ${RUNNER_ARCH}`);
+          }
+    - name: Download kagami with wget
+      shell: bash
+      run: |
+        wget ${{ steps.kagami-download-url.outputs.url }} -O /tmp/
+    - name: Verify checksum
+      shell: bash
+      run: |
+        echo "${{ steps.kagami-download-url.outputs.sha256 }}  /tmp/kagami" | sha256sum -c -
