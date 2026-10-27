@@ -1,8 +1,9 @@
 name: kagami integration with GitHub Actions
-description: integrate kagami with GitHub Actions
+description: Check whether there are any publicly disclosed vulnerabilities in a list of defined software with kagami.
+author: ZUNDA Inc.
 inputs:
   github-token:
-    description: GitHub access token. It's highly recommended to specify to prevent hitting the rate limit.
+    description: The token for kagami to read the advisories through the GitHub API. It needs no extra permissions, as kagami only reads public data.
     required: false
     default: ${{ github.token }}
   output-format:
@@ -15,7 +16,7 @@ inputs:
     description: Override `fail_on_severity` setting from the setting file. One of `unknown`, `low`, `medium`, `high` or `critical`.
     required: false
   config-file:
-    description: Specify which config file to use. If not specified, the default config file path(kagami.yaml) will be used.
+    description: The config file to read. kagami reads `kagami.yaml` if not specified.
     required: false
 outputs:
   stdout:
