@@ -35,7 +35,7 @@ runs:
   steps:
     - name: Determine which version to download
       id: kagami-download-url
-      uses: actions/github-script@v9
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const { RUNNER_OS, RUNNER_ARCH } = process.env;
@@ -92,7 +92,7 @@ runs:
 
     - name: Restore kagami from cache
       id: cache-kagami
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/kagami/${{ steps.kagami-download-url.outputs.filename }}
         key: ${{ steps.kagami-download-url.outputs.url }}
@@ -134,14 +134,14 @@ runs:
     # succeeds, and kagami fails the job with `fail-on-severity`.
     - name: Save kagami to cache
       if: steps.cache-kagami.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v6
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/kagami/${{ steps.kagami-download-url.outputs.filename }}
         key: ${{ steps.kagami-download-url.outputs.url }}
 
     - name: Run kagami
       id: run-kagami
-      uses: actions/github-script@v9
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         INPUTS: ${{ toJSON(inputs) }}
         KAGAMI_FILENAME: ${{ steps.kagami-download-url.outputs.filename }}
