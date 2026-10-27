@@ -1,0 +1,194 @@
+name: kagami integration with GitHub Actions
+description: Check whether there are any publicly disclosed vulnerabilities in a list of defined software with kagami.
+author: ZUNDA Inc.
+inputs:
+  github-token:
+    description: The token for kagami to read the advisories through the GitHub API. It needs no extra permissions, as kagami only reads public data.
+    required: false
+    default: ${{ github.token }}
+  output-format:
+    description: Override `output_format` setting from the setting file. One of `text`, `json`, `yaml` or `simple-markdown-text`.
+    required: false
+  log-level:
+    description: Override `log_level` setting from the setting file. One of `error`, `warn`, `info`, `debug` or `trace`.
+    required: false
+  fail-on-severity:
+    description: Override `fail_on_severity` setting from the setting file. One of `unknown`, `low`, `medium`, `high` or `critical`.
+    required: false
+  config-file:
+    description: The config file to read. kagami reads `kagami.yaml` if not specified.
+    required: false
+outputs:
+  stdout:
+    description: The standard output of kagami, which is the report.
+    value: ${{ steps.run-kagami.outputs.stdout }}
+  stderr:
+    description: The standard error of kagami, which is the logs.
+    value: ${{ steps.run-kagami.outputs.stderr }}
+  stdout-file:
+    description: The path to the file that holds `stdout`.
+    value: ${{ steps.run-kagami.outputs.stdout-file }}
+  stderr-file:
+    description: The path to the file that holds `stderr`.
+    value: ${{ steps.run-kagami.outputs.stderr-file }}
+runs:
+  using: composite
+  steps:
+    - name: Determine which version to download
+      id: kagami-download-url
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      with:
+        script: |
+          const { RUNNER_OS, RUNNER_ARCH } = process.env;
+          const versions = {
+            aarch64_apple_darwin: {
+              filename: 'kagami-aarch64-apple-darwin',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-aarch64-apple-darwin',
+              sha256: '8a168c92465754084519d962607e05055249012c4d7c9cd96baef1f97bb476cb',
+            },
+            x86_64_apple_darwin: {
+              filename: 'kagami-x86_64-apple-darwin',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-x86_64-apple-darwin',
+              sha256: '19d07ecb1374261b447ce6b33471db89cb56fd4639c3fc679b810029a199661d',
+            },
+            aarch64_unknown_linux_gnu: {
+              filename: 'kagami-aarch64-unknown-linux-gnu',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-aarch64-unknown-linux-gnu',
+              sha256: '0a5ca582c549c14a50726b20f11c99e6952d8053a54932e8d7b8b3ba539197ac',
+            },
+            x86_64_unknown_linux_gnu: {
+              filename: 'kagami-x86_64-unknown-linux-gnu',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-x86_64-unknown-linux-gnu',
+              sha256: '688240db3bcd5e8e4673a2c9dca7fa2deb4c1969939ad7b839f9af0c7fe91206',
+            },
+            x86_64_pc_windows_msvc: {
+              filename: 'kagami-x86_64-pc-windows-msvc.exe',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-x86_64-pc-windows-msvc.exe',
+              sha256: '387e1b4574532329662344708a90a7985650880a5f957e6f06e0a6923ae6483e',
+            },
+          }
+          
+          if (!RUNNER_OS || !RUNNER_ARCH) {
+            throw new Error('RUNNER_OS or RUNNER_ARCH is not defined');
+          }
+          
+          let version;
+          if (RUNNER_OS === 'Linux' && RUNNER_ARCH === 'X64') {
+            version = versions.x86_64_unknown_linux_gnu;
+          } else if (RUNNER_OS === 'Linux' && RUNNER_ARCH === 'ARM64') {
+            version = versions.aarch64_unknown_linux_gnu;
+          } else if (RUNNER_OS === 'macOS' && RUNNER_ARCH === 'X64') {
+            version = versions.x86_64_apple_darwin;
+          } else if (RUNNER_OS === 'macOS' && RUNNER_ARCH === 'ARM64') {
+            version = versions.aarch64_apple_darwin;
+          } else if (RUNNER_OS === 'Windows' && RUNNER_ARCH === 'X64') {
+            version = versions.x86_64_pc_windows_msvc;
+          } else {
+            throw new Error(`Unsupported platform: ${RUNNER_OS} ${RUNNER_ARCH}`);
+          }
+
+          core.setOutput('filename', version.filename);
+          core.setOutput('url', version.url);
+          core.setOutput('sha256', version.sha256);
+
+    - name: Restore kagami from cache
+      id: cache-kagami
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/kagami/${{ steps.kagami-download-url.outputs.filename }}
+        key: ${{ steps.kagami-download-url.outputs.url }}
+
+    - name: Verify checksum for cached file
+      id: verify-checksum
+      if: steps.cache-kagami.outputs.cache-hit == 'true'
+      shell: bash
+      continue-on-error: true
+      working-directory: ${{ runner.temp }}/kagami
+      run: |
+        actual=$(openssl sha256 -r "${{ steps.kagami-download-url.outputs.filename }}" | awk '{print $1}')
+        echo "Expected sha256: ${{ steps.kagami-download-url.outputs.sha256 }}, actual: $actual"
+        [[ "$actual" == "${{ steps.kagami-download-url.outputs.sha256 }}" ]]
+
+    - name: Download kagami with curl
+      id: download-kagami
+      shell: bash
+      if: steps.cache-kagami.outputs.cache-hit != 'true' || steps.verify-checksum.outcome == 'failure'
+      run: |
+        mkdir -p "$RUNNER_TEMP/kagami"
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/kagami/${{ steps.kagami-download-url.outputs.filename }}" "${{ steps.kagami-download-url.outputs.url }}"
+
+    - name: Verify checksum for downloaded file
+      if: steps.download-kagami.outcome == 'success'
+      shell: bash
+      working-directory: ${{ runner.temp }}/kagami
+      run: |
+        actual=$(openssl sha256 -r "${{ steps.kagami-download-url.outputs.filename }}" | awk '{print $1}')
+        echo "Expected sha256: ${{ steps.kagami-download-url.outputs.sha256 }}, actual: $actual"
+        [[ "$actual" == "${{ steps.kagami-download-url.outputs.sha256 }}" ]]
+
+    - name: Make kagami executable
+      shell: bash
+      run: |
+        chmod +x "$RUNNER_TEMP/kagami/${{ steps.kagami-download-url.outputs.filename }}"
+
+    # Saved before running kagami, as the post step of actions/cache saves only when the job
+    # succeeds, and kagami fails the job with `fail-on-severity`.
+    - name: Save kagami to cache
+      if: steps.cache-kagami.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/kagami/${{ steps.kagami-download-url.outputs.filename }}
+        key: ${{ steps.kagami-download-url.outputs.url }}
+
+    - name: Run kagami
+      id: run-kagami
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        INPUTS: ${{ toJSON(inputs) }}
+        KAGAMI_FILENAME: ${{ steps.kagami-download-url.outputs.filename }}
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          const inputs = JSON.parse(process.env.INPUTS);
+
+          const args = [];
+          if (inputs['output-format']) {
+            args.push('--output-format', inputs['output-format']);
+          }
+          if (inputs['log-level']) {
+            args.push('--log-level', inputs['log-level']);
+          }
+          if (inputs['fail-on-severity']) {
+            args.push('--fail-on-severity', inputs['fail-on-severity']);
+          }
+          if (inputs['config-file']) {
+            args.push(inputs['config-file']);
+          }
+
+          const env = { ...process.env };
+          
+          // Pass it only when the input is given.
+          if (inputs['github-token']) {
+            env.GH_TOKEN = inputs['github-token'];
+          }
+
+          const kagami = path.join(process.env.RUNNER_TEMP, 'kagami', process.env.KAGAMI_FILENAME);
+          const { exitCode, stdout, stderr } = await exec.getExecOutput(kagami, args, { env, ignoreReturnCode: true });
+
+          // A directory per run, as this action may run more than once in a job.
+          const outputDir = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'kagami-output-'));
+          const stdoutFile = path.join(outputDir, 'stdout');
+          const stderrFile = path.join(outputDir, 'stderr');
+          
+          fs.writeFileSync(stdoutFile, stdout);
+          fs.writeFileSync(stderrFile, stderr);
+          
+          core.setOutput('stdout', stdout);
+          core.setOutput('stderr', stderr);
+          core.setOutput('stdout-file', stdoutFile);
+          core.setOutput('stderr-file', stderrFile);
+
+          if (exitCode !== 0) {
+            core.setFailed(`kagami exited with code ${exitCode}.`);
+          }
