@@ -4,17 +4,18 @@ inputs:
   github-token:
     description: GitHub access token. It's highly recommended to specify to prevent hitting the rate limit.
     required: false
+    default: ${{ github.token }}
   output-format:
-    description: Override `output_format` setting from the setting file.
+    description: Override `output_format` setting from the setting file. One of `text`, `json`, `yaml` or `simple-markdown-text`.
     required: false
   log-level:
-    description: Override `log_level` setting from the setting file.
+    description: Override `log_level` setting from the setting file. One of `error`, `warn`, `info`, `debug` or `trace`.
     required: false
   fail-on-severity:
-    description: Override `fail_on_severity` setting from the setting file.
+    description: Override `fail_on_severity` setting from the setting file. One of `unknown`, `low`, `medium`, `high` or `critical`.
     required: false
   config-file:
-    description: Specify which config file to use. If not specified, the default config file path(kagami.yml) will be used.
+    description: Specify which config file to use. If not specified, the default config file path(kagami.yaml) will be used.
     required: false
 runs:
   using: composite
@@ -28,28 +29,28 @@ runs:
           const versions = {
             aarch64_apple_darwin: {
               filename: 'kagami-aarch64-apple-darwin',
-              url: '',
-              sha256: '',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-aarch64-apple-darwin',
+              sha256: '8a168c92465754084519d962607e05055249012c4d7c9cd96baef1f97bb476cb',
             },
             x86_64_apple_darwin: {
               filename: 'kagami-x86_64-apple-darwin',
-              url: '',
-              sha256: '',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-x86_64-apple-darwin',
+              sha256: '19d07ecb1374261b447ce6b33471db89cb56fd4639c3fc679b810029a199661d',
             },
             aarch64_unknown_linux_gnu: {
               filename: 'kagami-aarch64-unknown-linux-gnu',
-              url: '',
-              sha256: '',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-aarch64-unknown-linux-gnu',
+              sha256: '0a5ca582c549c14a50726b20f11c99e6952d8053a54932e8d7b8b3ba539197ac',
             },
             x86_64_unknown_linux_gnu: {
               filename: 'kagami-x86_64-unknown-linux-gnu',
-              url: '',
-              sha256: '',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-x86_64-unknown-linux-gnu',
+              sha256: '688240db3bcd5e8e4673a2c9dca7fa2deb4c1969939ad7b839f9af0c7fe91206',
             },
             x86_64_pc_windows_msvc: {
               filename: 'kagami-x86_64-pc-windows-msvc.exe',
-              url: '',
-              sha256: '',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-x86_64-pc-windows-msvc.exe',
+              sha256: '387e1b4574532329662344708a90a7985650880a5f957e6f06e0a6923ae6483e',
             },
           }
           
@@ -57,50 +58,84 @@ runs:
             throw new Error('RUNNER_OS or RUNNER_ARCH is not defined');
           }
           
+          let version;
           if (RUNNER_OS === 'Linux' && RUNNER_ARCH === 'X64') {
-            return versions.x86_64_unknown_linux_gnu;
+            version = versions.x86_64_unknown_linux_gnu;
           } else if (RUNNER_OS === 'Linux' && RUNNER_ARCH === 'ARM64') {
-            return versions.aarch64_unknown_linux_gnu;
+            version = versions.aarch64_unknown_linux_gnu;
           } else if (RUNNER_OS === 'macOS' && RUNNER_ARCH === 'X64') {
-            return versions.x86_64_apple_darwin;
+            version = versions.x86_64_apple_darwin;
           } else if (RUNNER_OS === 'macOS' && RUNNER_ARCH === 'ARM64') {
-            return versions.aarch64_apple_darwin;
+            version = versions.aarch64_apple_darwin;
           } else if (RUNNER_OS === 'Windows' && RUNNER_ARCH === 'X64') {
-            return versions.x86_64_pc_windows_msvc;
+            version = versions.x86_64_pc_windows_msvc;
           } else {
             throw new Error(`Unsupported platform: ${RUNNER_OS} ${RUNNER_ARCH}`);
           }
-    - name: Cache kagami
+
+          core.setOutput('filename', version.filename);
+          core.setOutput('url', version.url);
+          core.setOutput('sha256', version.sha256);
+    - name: Restore kagami from cache
       id: cache-kagami
-      uses: actions/cache@v6
+      uses: actions/cache/restore@v6
       with:
-        path: /tmp/${{ steps.kagami-download-url.outputs.filename }}
+        path: ${{ runner.temp }}/kagami/${{ steps.kagami-download-url.outputs.filename }}
         key: ${{ steps.kagami-download-url.outputs.url }}
     - name: Verify checksum for cached file
       id: verify-checksum
+      if: steps.cache-kagami.outputs.cache-hit == 'true'
       shell: bash
       continue-on-error: true
+      working-directory: ${{ runner.temp }}/kagami
       run: |
-        echo "${{ steps.kagami-download-url.outputs.sha256 }}  /tmp/kagami" | sha256sum -c -
-    - name: Download kagami with wget
+        # The output format of openssl differs by version, e.g. `SHA256(file)= ...` or `SHA2-256(file)= ...`.
+        actual=$(openssl sha256 "${{ steps.kagami-download-url.outputs.filename }}" | grep -oE '[0-9a-f]{64}')
+        echo "Expected sha256: ${{ steps.kagami-download-url.outputs.sha256 }}, actual: $actual"
+        [[ "$actual" == "${{ steps.kagami-download-url.outputs.sha256 }}" ]]
+    - name: Download kagami with curl
       id: download-kagami
       shell: bash
-      if: steps.verify-checksum.outcome == 'failure'
+      if: steps.cache-kagami.outputs.cache-hit != 'true' || steps.verify-checksum.outcome == 'failure'
       run: |
-        wget ${{ steps.kagami-download-url.outputs.url }} -O /tmp/
+        mkdir -p "$RUNNER_TEMP/kagami"
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/kagami/${{ steps.kagami-download-url.outputs.filename }}" "${{ steps.kagami-download-url.outputs.url }}"
     - name: Verify checksum for downloaded file
       if: steps.download-kagami.outcome == 'success'
       shell: bash
+      working-directory: ${{ runner.temp }}/kagami
       run: |
-        echo "${{ steps.kagami-download-url.outputs.sha256 }}  /tmp/kagami" | sha256sum -c -
+        actual=$(openssl sha256 "${{ steps.kagami-download-url.outputs.filename }}" | grep -oE '[0-9a-f]{64}')
+        echo "Expected sha256: ${{ steps.kagami-download-url.outputs.sha256 }}, actual: $actual"
+        [[ "$actual" == "${{ steps.kagami-download-url.outputs.sha256 }}" ]]
     - name: Make kagami executable
       shell: bash
       run: |
-        chmod +x /tmp/kagami
+        chmod +x "$RUNNER_TEMP/kagami/${{ steps.kagami-download-url.outputs.filename }}"
+    # Saved before running kagami, as the post step of actions/cache saves only when the job
+    # succeeds, and kagami fails the job with `fail-on-severity`.
+    - name: Save kagami to cache
+      if: steps.cache-kagami.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/kagami/${{ steps.kagami-download-url.outputs.filename }}
+        key: ${{ steps.kagami-download-url.outputs.url }}
     - name: Run kagami
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_OUTPUT_FORMAT: ${{ inputs.output-format }}
+        INPUT_LOG_LEVEL: ${{ inputs.log-level }}
+        INPUT_FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
+        INPUT_CONFIG_FILE: ${{ inputs.config-file }}
       run: |
-        /tmp/kagami \
-          ${{ case(inputs.output-format != '', '--output-format' , '') }}
+        # export it only when the input is given.
+        if [[ -n "$INPUT_GITHUB_TOKEN" ]]; then
+          export GH_TOKEN="$INPUT_GITHUB_TOKEN"
+        fi
+        
+        "$RUNNER_TEMP/kagami/${{ steps.kagami-download-url.outputs.filename }}" \
+          ${INPUT_OUTPUT_FORMAT:+--output-format "$INPUT_OUTPUT_FORMAT"} \
+          ${INPUT_LOG_LEVEL:+--log-level "$INPUT_LOG_LEVEL"} \
+          ${INPUT_FAIL_ON_SEVERITY:+--fail-on-severity "$INPUT_FAIL_ON_SEVERITY"} \
+          ${INPUT_CONFIG_FILE:+"$INPUT_CONFIG_FILE"}
