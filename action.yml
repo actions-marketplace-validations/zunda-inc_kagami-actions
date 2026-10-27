@@ -43,28 +43,28 @@ runs:
           const versions = {
             aarch64_apple_darwin: {
               filename: 'kagami-aarch64-apple-darwin',
-              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-aarch64-apple-darwin',
-              sha256: '8a168c92465754084519d962607e05055249012c4d7c9cd96baef1f97bb476cb',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.3.0/kagami-0.3.0-aarch64-apple-darwin',
+              sha256: 'd3cde1c946561cced54f16a4e13dd568ab71de7e1ea457ab91436d0ae936d5c6',
             },
             x86_64_apple_darwin: {
               filename: 'kagami-x86_64-apple-darwin',
-              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-x86_64-apple-darwin',
-              sha256: '19d07ecb1374261b447ce6b33471db89cb56fd4639c3fc679b810029a199661d',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.3.0/kagami-0.3.0-x86_64-apple-darwin',
+              sha256: 'd4bc1bb48370a274d921b1c4a2fb478fc26fddfa56e6844abdf4d9e1a04ef04f',
             },
             aarch64_unknown_linux_gnu: {
               filename: 'kagami-aarch64-unknown-linux-gnu',
-              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-aarch64-unknown-linux-gnu',
-              sha256: '0a5ca582c549c14a50726b20f11c99e6952d8053a54932e8d7b8b3ba539197ac',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.3.0/kagami-0.3.0-aarch64-unknown-linux-gnu',
+              sha256: 'e72bfdb70cc2906981065516a6a43741ad242ec352eedee96f25318ad2d84eac',
             },
             x86_64_unknown_linux_gnu: {
               filename: 'kagami-x86_64-unknown-linux-gnu',
-              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-x86_64-unknown-linux-gnu',
-              sha256: '688240db3bcd5e8e4673a2c9dca7fa2deb4c1969939ad7b839f9af0c7fe91206',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.3.0/kagami-0.3.0-x86_64-unknown-linux-gnu',
+              sha256: 'ffb05b0c7011f1fb1952dafa40ac691c228dfa379a0bdccd2eb5de508562c286',
             },
             x86_64_pc_windows_msvc: {
               filename: 'kagami-x86_64-pc-windows-msvc.exe',
-              url: 'https://github.com/zunda-inc/kagami/releases/download/0.2.1/kagami-0.2.1-x86_64-pc-windows-msvc.exe',
-              sha256: '387e1b4574532329662344708a90a7985650880a5f957e6f06e0a6923ae6483e',
+              url: 'https://github.com/zunda-inc/kagami/releases/download/0.3.0/kagami-0.3.0-x86_64-pc-windows-msvc.exe',
+              sha256: '23491823233b44c17bd06481c40413694d5275f783de9f03ffd1a3365e59ede5',
             },
           }
           
