@@ -1,0 +1,24 @@
+name: actionlint
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+  # reviewdog reads the diff of the pull request when there are findings.
+  pull-requests: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: reviewdog/action-actionlint@cfa6a621f27735ccc88d35af9d0608692fd9b9f7 # v1.80.8
+        with:
+          reporter: github-annotations
+          filter_mode: nofilter
+          fail_level: any
