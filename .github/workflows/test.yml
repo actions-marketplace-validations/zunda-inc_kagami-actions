@@ -23,26 +23,48 @@ jobs:
           log-level: info
           fail-on-severity: unknown
           config-file: test/kagami.yml
+      # The report is read from the files, as embedding it in the scripts with `${{ }}` breaks the
+      # shell syntax, and it is too large to be passed as an environment variable.
       - name: Print stdout
+        env:
+          STDOUT_FILE: ${{ steps.run-kagami.outputs.stdout-file }}
         run: |
           echo "stdout:"
-          echo "${{ steps.run-kagami.outputs.stdout }}"
+          cat "$STDOUT_FILE"
       - name: Print stderr
+        env:
+          STDERR_FILE: ${{ steps.run-kagami.outputs.stderr-file }}
         run: |
           echo "stderr:"
-          echo "${{ steps.run-kagami.outputs.stderr }}"
+          cat "$STDERR_FILE"
+      - name: Assert that the stdout and stderr outputs are set
+        env:
+          HAS_STDOUT: ${{ steps.run-kagami.outputs.stdout != '' }}
+          HAS_STDERR: ${{ steps.run-kagami.outputs.stderr != '' }}
+        run: |
+          if [ "$HAS_STDOUT" != "true" ] || [ "$HAS_STDERR" != "true" ]; then
+            echo "Expected the stdout and stderr outputs to be non-empty, but they were not."
+            exit 1
+          fi
       - name: Assert that the stdout is valid JSON
+        env:
+          STDOUT_FILE: ${{ steps.run-kagami.outputs.stdout-file }}
         run: |
-          echo "${{ steps.run-kagami.outputs.stdout }}" | jq empty || exit 1
+          jq empty "$STDOUT_FILE"
       - name: Assert that the stderr is not empty
+        env:
+          STDERR_FILE: ${{ steps.run-kagami.outputs.stderr-file }}
         run: |
-          if [ -z "${{ steps.run-kagami.outputs.stderr }}" ]; then
+          if [ ! -s "$STDERR_FILE" ]; then
             echo "Expected stderr to be non-empty, but it was empty."
             exit 1
           fi
+      # The report is an array of the targets, each of which holds the advisories found for it.
       - name: Assert that the output contains the expected vulnerabilities
+        env:
+          STDOUT_FILE: ${{ steps.run-kagami.outputs.stdout-file }}
         run: |
-          echo "${{ steps.run-kagami.outputs.stdout }}" | jq -e '.vulnerabilities | length > 0' || exit 1
+          jq -e '[.[].advisories[]] | length > 0' "$STDOUT_FILE"
       - name: Assert that the exit code is 1
         run: |
           if [ "${{ steps.run-kagami.outcome }}" != "failure" ]; then
