@@ -1,0 +1,51 @@
+name: test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./
+        id: run-kagami
+        continue-on-error: true
+        with:
+          output-format: json
+          log-level: info
+          fail-on-severity: unknown
+          config-file: test/kagami.yml
+      - name: Print stdout
+        run: |
+          echo "stdout:"
+          echo "${{ steps.run-kagami.outputs.stdout }}"
+      - name: Print stderr
+        run: |
+          echo "stderr:"
+          echo "${{ steps.run-kagami.outputs.stderr }}"
+      - name: Assert that the stdout is valid JSON
+        run: |
+          echo "${{ steps.run-kagami.outputs.stdout }}" | jq empty || exit 1
+      - name: Assert that the stderr is not empty
+        run: |
+          if [ -z "${{ steps.run-kagami.outputs.stderr }}" ]; then
+            echo "Expected stderr to be non-empty, but it was empty."
+            exit 1
+          fi
+      - name: Assert that the output contains the expected vulnerabilities
+        run: |
+          echo "${{ steps.run-kagami.outputs.stdout }}" | jq -e '.vulnerabilities | length > 0' || exit 1
+      - name: Assert that the exit code is 1
+        run: |
+          if [ "${{ steps.run-kagami.outcome }}" != "failure" ]; then
+            echo "Expected the action to fail, but it succeeded."
+            exit 1
+          fi
