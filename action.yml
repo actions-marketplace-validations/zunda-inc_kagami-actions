@@ -76,12 +76,14 @@ runs:
           core.setOutput('filename', version.filename);
           core.setOutput('url', version.url);
           core.setOutput('sha256', version.sha256);
+
     - name: Restore kagami from cache
       id: cache-kagami
       uses: actions/cache/restore@v6
       with:
         path: ${{ runner.temp }}/kagami/${{ steps.kagami-download-url.outputs.filename }}
         key: ${{ steps.kagami-download-url.outputs.url }}
+
     - name: Verify checksum for cached file
       id: verify-checksum
       if: steps.cache-kagami.outputs.cache-hit == 'true'
@@ -89,10 +91,10 @@ runs:
       continue-on-error: true
       working-directory: ${{ runner.temp }}/kagami
       run: |
-        # The output format of openssl differs by version, e.g. `SHA256(file)= ...` or `SHA2-256(file)= ...`.
-        actual=$(openssl sha256 "${{ steps.kagami-download-url.outputs.filename }}" | grep -oE '[0-9a-f]{64}')
+        actual=$(openssl sha256 -r "${{ steps.kagami-download-url.outputs.filename }}" | awk '{print $1}')
         echo "Expected sha256: ${{ steps.kagami-download-url.outputs.sha256 }}, actual: $actual"
         [[ "$actual" == "${{ steps.kagami-download-url.outputs.sha256 }}" ]]
+
     - name: Download kagami with curl
       id: download-kagami
       shell: bash
@@ -100,18 +102,21 @@ runs:
       run: |
         mkdir -p "$RUNNER_TEMP/kagami"
         curl -fsSL --retry 3 -o "$RUNNER_TEMP/kagami/${{ steps.kagami-download-url.outputs.filename }}" "${{ steps.kagami-download-url.outputs.url }}"
+
     - name: Verify checksum for downloaded file
       if: steps.download-kagami.outcome == 'success'
       shell: bash
       working-directory: ${{ runner.temp }}/kagami
       run: |
-        actual=$(openssl sha256 "${{ steps.kagami-download-url.outputs.filename }}" | grep -oE '[0-9a-f]{64}')
+        actual=$(openssl sha256 -r "${{ steps.kagami-download-url.outputs.filename }}" | awk '{print $1}')
         echo "Expected sha256: ${{ steps.kagami-download-url.outputs.sha256 }}, actual: $actual"
         [[ "$actual" == "${{ steps.kagami-download-url.outputs.sha256 }}" ]]
+
     - name: Make kagami executable
       shell: bash
       run: |
         chmod +x "$RUNNER_TEMP/kagami/${{ steps.kagami-download-url.outputs.filename }}"
+
     # Saved before running kagami, as the post step of actions/cache saves only when the job
     # succeeds, and kagami fails the job with `fail-on-severity`.
     - name: Save kagami to cache
@@ -120,6 +125,7 @@ runs:
       with:
         path: ${{ runner.temp }}/kagami/${{ steps.kagami-download-url.outputs.filename }}
         key: ${{ steps.kagami-download-url.outputs.url }}
+
     - name: Run kagami
       shell: bash
       env:
