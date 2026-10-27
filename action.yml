@@ -17,6 +17,19 @@ inputs:
   config-file:
     description: Specify which config file to use. If not specified, the default config file path(kagami.yaml) will be used.
     required: false
+outputs:
+  stdout:
+    description: The standard output of kagami, which is the report.
+    value: ${{ steps.run-kagami.outputs.stdout }}
+  stderr:
+    description: The standard error of kagami, which is the logs.
+    value: ${{ steps.run-kagami.outputs.stderr }}
+  stdout-file:
+    description: The path to the file that holds `stdout`.
+    value: ${{ steps.run-kagami.outputs.stdout-file }}
+  stderr-file:
+    description: The path to the file that holds `stderr`.
+    value: ${{ steps.run-kagami.outputs.stderr-file }}
 runs:
   using: composite
   steps:
@@ -127,21 +140,54 @@ runs:
         key: ${{ steps.kagami-download-url.outputs.url }}
 
     - name: Run kagami
-      shell: bash
+      id: run-kagami
+      uses: actions/github-script@v9
       env:
-        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
-        INPUT_OUTPUT_FORMAT: ${{ inputs.output-format }}
-        INPUT_LOG_LEVEL: ${{ inputs.log-level }}
-        INPUT_FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
-        INPUT_CONFIG_FILE: ${{ inputs.config-file }}
-      run: |
-        # export it only when the input is given.
-        if [[ -n "$INPUT_GITHUB_TOKEN" ]]; then
-          export GH_TOKEN="$INPUT_GITHUB_TOKEN"
-        fi
-        
-        "$RUNNER_TEMP/kagami/${{ steps.kagami-download-url.outputs.filename }}" \
-          ${INPUT_OUTPUT_FORMAT:+--output-format "$INPUT_OUTPUT_FORMAT"} \
-          ${INPUT_LOG_LEVEL:+--log-level "$INPUT_LOG_LEVEL"} \
-          ${INPUT_FAIL_ON_SEVERITY:+--fail-on-severity "$INPUT_FAIL_ON_SEVERITY"} \
-          ${INPUT_CONFIG_FILE:+"$INPUT_CONFIG_FILE"}
+        INPUTS: ${{ toJSON(inputs) }}
+        KAGAMI_FILENAME: ${{ steps.kagami-download-url.outputs.filename }}
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          const inputs = JSON.parse(process.env.INPUTS);
+
+          const args = [];
+          if (inputs['output-format']) {
+            args.push('--output-format', inputs['output-format']);
+          }
+          if (inputs['log-level']) {
+            args.push('--log-level', inputs['log-level']);
+          }
+          if (inputs['fail-on-severity']) {
+            args.push('--fail-on-severity', inputs['fail-on-severity']);
+          }
+          if (inputs['config-file']) {
+            args.push(inputs['config-file']);
+          }
+
+          const env = { ...process.env };
+          
+          // Pass it only when the input is given.
+          if (inputs['github-token']) {
+            env.GH_TOKEN = inputs['github-token'];
+          }
+
+          const kagami = path.join(process.env.RUNNER_TEMP, 'kagami', process.env.KAGAMI_FILENAME);
+          const { exitCode, stdout, stderr } = await exec.getExecOutput(kagami, args, { env, ignoreReturnCode: true });
+
+          // A directory per run, as this action may run more than once in a job.
+          const outputDir = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'kagami-output-'));
+          const stdoutFile = path.join(outputDir, 'stdout');
+          const stderrFile = path.join(outputDir, 'stderr');
+          
+          fs.writeFileSync(stdoutFile, stdout);
+          fs.writeFileSync(stderrFile, stderr);
+          
+          core.setOutput('stdout', stdout);
+          core.setOutput('stderr', stderr);
+          core.setOutput('stdout-file', stdoutFile);
+          core.setOutput('stderr-file', stderrFile);
+
+          if (exitCode !== 0) {
+            core.setFailed(`kagami exited with code ${exitCode}.`);
+          }
