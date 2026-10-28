@@ -1,0 +1,35 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      short-tag:
+        description: The short tag to move to the release, such as v1.
+        required: true
+        type: string
+      long-tag:
+        description: The long tag to release, such as v1.2.3.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      # The credentials are kept to push the tags.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The short tag is forced, as it moves from the previous release.
+      - name: Push the tags
+        env:
+          SHORT_TAG: ${{ inputs.short-tag }}
+          LONG_TAG: ${{ inputs.long-tag }}
+        run: git push --atomic origin "HEAD:refs/tags/$LONG_TAG" "+HEAD:refs/tags/$SHORT_TAG"
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LONG_TAG: ${{ inputs.long-tag }}
+        run: gh release create "$LONG_TAG" --title "$LONG_TAG"
