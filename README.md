@@ -63,7 +63,7 @@ job does not fail.
 
 All inputs are optional.
 
-- `config-file`: the config file to read (default: `kagami.yaml`)
+- `config-file`: the config file to read (default: `kagami.yaml`, then `kagami.yml`)
 - `output-format`: `text`, `json`, `yaml` or `simple-markdown-text`
 - `log-level`: `error`, `warn`, `info`, `debug` or `trace`
 - `fail-on-severity`: `unknown`, `low`, `medium`, `high` or `critical`, the lowest severity that makes
@@ -113,7 +113,9 @@ For example, to write the report to the job summary even when the step fails:
    match fails the step.
 4. It runs kagami in the working directory, so check out your repository before the action.
 
-The action runs on Linux (x64 and ARM64), macOS (x64 and ARM64) and Windows (x64). Self-hosted
+The action runs on Linux (x64 and ARM64), macOS (x64 and ARM64) and Windows (x64 and ARM64). On
+Linux, kagami needs glibc 2.38 or newer on x64 and 2.39 or newer on ARM64, so it runs on
+`ubuntu-24.04` and `ubuntu-24.04-arm` but not on `ubuntu-22.04` or `ubuntu-22.04-arm`. Self-hosted
 runners need `bash`, `curl` and `openssl`, which GitHub-hosted runners have.
 
 ## Versioning
